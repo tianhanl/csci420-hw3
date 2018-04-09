@@ -185,19 +185,56 @@ void testSphereIntersection(Ray &ray)
         if (ray.distance == -1)
         {
           ray.distance = tFinal;
-          ray.color[0] = spheres[i].color_specular[0];
-          ray.color[1] = spheres[i].color_specular[1];
-          ray.color[2] = spheres[i].color_specular[2];
+          ray.color[0] = spheres[i].color_diffuse[0];
+          ray.color[1] = spheres[i].color_diffuse[1];
+          ray.color[2] = spheres[i].color_diffuse[2];
         }
         else if (tFinal < ray.distance)
         {
           ray.distance = tFinal;
-          ray.color[0] = spheres[i].color_specular[0];
-          ray.color[1] = spheres[i].color_specular[1];
-          ray.color[2] = spheres[i].color_specular[2];
+          ray.color[0] = spheres[i].color_diffuse[0];
+          ray.color[1] = spheres[i].color_diffuse[1];
+          ray.color[2] = spheres[i].color_diffuse[2];
         }
       }
     }
+  }
+}
+
+void testTriangleIntersection(Ray &ray)
+{
+  double xd = ray.direction[0];
+  double yd = ray.direction[1];
+  double zd = ray.direction[2];
+  double xo = ray.origin[0];
+  double yo = ray.origin[1];
+  double zo = ray.origin[2];
+  for (int i = 0; i < num_triangles; i++)
+  {
+    double v1x = triangles[i].v[0].position[0];
+    double v1y = triangles[i].v[0].position[1];
+    double v1z = triangles[i].v[0].position[2];
+    double v2x = triangles[i].v[1].position[0];
+    double v2y = triangles[i].v[1].position[1];
+    double v2z = triangles[i].v[1].position[2];
+    double v3x = triangles[i].v[2].position[0];
+    double v3y = triangles[i].v[2].position[1];
+    double v3z = triangles[i].v[2].position[2];
+    double ebax = v1x - v2x;
+    double ebay = v1y - v2y;
+    double ebaz = v1z - v2z;
+    double ecax = v3x - v2x;
+    double ecay = v3x - v2y;
+    double ecaz = v3x - v2z;
+    double nx = ebay * ecaz - ebaz * ecay;
+    double ny = ebaz * ecax - ebax * ecaz;
+    double nz = ebax * ecay - ebay * ecax;
+    double d = -nx * v1x - ny * v1y - nz * v1z;
+    double tp = -(xo * nx + yo * ny + yo * nz + d) / (xd * nx + yd * ny + yz * nz);
+    double px = xo + xd * tp;
+    double py = yo + yd * tp;
+    double pz = zo + zd * tp;
+    // currently the point intersect with plane
   }
 }
 
