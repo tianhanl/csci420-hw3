@@ -27,6 +27,7 @@
 #include <imageIO.h>
 #include <vector>
 #include <cmath>
+#include <iostream>
 
 #define MAX_TRIANGLES 20000
 #define MAX_SPHERES 100
@@ -84,6 +85,7 @@ struct Light
 struct Ray
 {
   double direction[3];
+  double origin[3];
   double distance;
   double color[3];
 };
@@ -98,6 +100,7 @@ double ambient_light[3];
 int num_triangles = 0;
 int num_spheres = 0;
 int num_lights = 0;
+const double pi = std::acos(-1);
 
 void plot_pixel_display(int x, int y, unsigned char r, unsigned char g,
                         unsigned char b);
@@ -106,34 +109,117 @@ void plot_pixel_jpeg(int x, int y, unsigned char r, unsigned char g,
 void plot_pixel(int x, int y, unsigned char r, unsigned char g,
                 unsigned char b);
 
-// MODIFY THIS FUNCTION
-const double pi = std::acos(-1);
-void draw_scene()
+vector<Ray> createRays()
 {
-  double xMax = (WIDTH / HEIGHT) * tan(pi / 6);
+  vector<Ray> rays;
+  double a = (double)WIDTH / (double)HEIGHT;
+  double xMax = a * tan(pi / 6);
   double yMax = tan(pi / 6);
+  double midWidth = (double)WIDTH / 2.0;
+  double midHeight = (double)HEIGHT / 2.0;
   for (unsigned int x = 0; x < WIDTH; x++)
   {
     for (unsigned int y = 0; y < HEIGHT; y++)
     {
       Ray r;
       // initialize origin
-      r.direction[0] = x>(WIDTH/2)?-xMax*(x/(WIDTH/2))):xMax*((x-WIDTH/2)/(WIDTH/2)));
-      r.direction[1] =  y>(HEIGHT/2)?-yMax*(y/(HEIGHT/2))):yMax*((y-HEIGHT/2)/(height/2)));
-      r.direction[2] = -depth;
+      r.origin[0] = 0;
+      r.origin[1] = 0;
+      r.origin[2] = 0;
       // initialize direction
+      r.direction[0] = xMax * (x - midWidth) / midWidth;
+      r.direction[1] = yMax * (y - midHeight) / midHeight;
+      r.direction[2] = -depth;
+      // normalize direction
+      double length = sqrt(pow(r.direction[0], 2) + pow(r.direction[1], 2) + pow(r.direction[2], 2));
+      r.direction[0] = r.direction[0] / length;
+      r.direction[1] = r.direction[1] / length;
+      r.direction[2] = r.direction[2] / length;
+      // set default color
+      r.color[0] = 1;
+      r.color[1] = 1;
+      r.color[2] = 1;
+      r.distance = -1;
+      // cout << "Ray for " << x << " " << y << " is " << r.direction[0] << " " << r.direction[1] << " " << r.direction[2] << endl;
       rays.push_back(r);
     }
   }
+  return rays;
+}
 
+// Calculate b2 – 4c, abort if negative
+// – Compute normal only for closest intersection
+// – Other similar optimizations
+// x = x0 + xdt, y=y0+ydt, z=z0+zdt
+
+void testSphereIntersection(Ray &ray)
+{
+  double xd = ray.direction[0];
+  double yd = ray.direction[1];
+  double zd = ray.direction[2];
+  double xo = ray.origin[0];
+  double yo = ray.origin[1];
+  double zo = ray.origin[2];
+  for (int i = 0; i < num_spheres; i++)
+  {
+    double xc = spheres[i].position[0];
+    double yc = spheres[i].position[1];
+    double zc = spheres[i].position[2];
+    double r = spheres[i].radius;
+    double b = 2 * (xd * (xo - xc) + yd * (yo - yc) + zd * (zo - zc));
+    double c = pow(xo - xc, 2) + pow(yo - yc, 2) + pow(zo - zc, 2) - pow(r, 2);
+    if (pow(b, 2) - 4 * c < 0)
+    {
+      continue;
+    }
+    else
+    {
+      double t0 = (-b + sqrt(pow(b, 2) - 4 * c)) / 2;
+      double t1 = (-b - sqrt(pow(b, 2) - 4 * c)) / 2;
+      // test if any of them is larger than 0
+      t0 = t0 > 0 ? t0 : 0;
+      t1 = t1 > 0 ? t0 : 0;
+      double tFinal = t0 < t1 ? t0 : t1;
+      if (tFinal != 0)
+      {
+        if (ray.distance == -1)
+        {
+          ray.distance = tFinal;
+          ray.color[0] = spheres[i].color_specular[0];
+          ray.color[1] = spheres[i].color_specular[1];
+          ray.color[2] = spheres[i].color_specular[2];
+        }
+        else if (tFinal < ray.distance)
+        {
+          ray.distance = tFinal;
+          ray.color[0] = spheres[i].color_specular[0];
+          ray.color[1] = spheres[i].color_specular[1];
+          ray.color[2] = spheres[i].color_specular[2];
+        }
+      }
+    }
+  }
+}
+
+// MODIFY THIS FUNCTION
+
+void draw_scene()
+{
+  rays = createRays();
   // a simple test output
+  for (int i = 0; i < rays.size(); i++)
+  {
+    testSphereIntersection(rays[i]);
+  }
+  int count = 0;
   for (unsigned int x = 0; x < WIDTH; x++)
   {
     glPointSize(2.0);
     glBegin(GL_POINTS);
     for (unsigned int y = 0; y < HEIGHT; y++)
     {
-      plot_pixel(x, y, x % 256, y % 256, (x + y) % 256);
+      plot_pixel(x, y, rays[count].color[0] * 256.0, rays[count].color[1] * 256.0, rays[count].color[2] * 256.0);
+      count++;
     }
     glEnd();
     glFlush();
