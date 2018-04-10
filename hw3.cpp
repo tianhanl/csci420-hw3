@@ -75,6 +75,12 @@ struct Sphere
   double shininess;
   double radius;
 };
+struct Point
+{
+  double x;
+  double y;
+  double z;
+};
 
 struct Light
 {
@@ -84,11 +90,89 @@ struct Light
 
 struct Ray
 {
-  double direction[3];
-  double origin[3];
+  Point direction;
+  Point origin;
   double distance;
   double color[3];
 };
+
+Point normalize(Point p)
+{
+  Point output;
+  float length = sqrt(pow(p.x, 2) + pow(p.y, 2) + pow(p.z, 2));
+  output.x = p.x / length;
+  output.y = p.y / length;
+  output.z = p.z / length;
+  return output;
+}
+
+Point normalizedCrossProduct(Point p1, Point p2)
+{
+  Point output;
+  output.x = p1.y * p2.z - p1.z * p2.y;
+  output.y = p1.z * p2.x - p1.x * p2.z;
+  output.z = p1.x * p2.y - p1.y * p2.x;
+  return normalize(output);
+}
+
+Point crossProduct(Point p1, Point p2)
+{
+  Point output;
+  output.x = p1.y * p2.z - p1.z * p2.y;
+  output.y = p1.z * p2.x - p1.x * p2.z;
+  output.z = p1.x * p2.y - p1.y * p2.x;
+  return output;
+}
+
+double dotProduct(Point p1, Point p2)
+{
+  return p1.x * p2.x + p1.y * p2.y + p1.z * p2.z;
+}
+
+Point scalarMultiplication(Point p, float num)
+{
+  Point output;
+  output.x = p.x * num;
+  output.y = p.y * num;
+  output.z = p.z * num;
+  return output;
+}
+
+Point addTwoPoint(Point pointA, Point pointB)
+{
+  Point output;
+  output.x = pointA.x + pointB.x;
+  output.y = pointA.y + pointB.y;
+  output.z = pointA.z + pointB.z;
+  return output;
+}
+
+Point deductTwoPoint(Point pointA, Point pointB)
+{
+  Point output;
+  output.x = pointA.x - pointB.x;
+  output.y = pointA.y - pointB.y;
+  output.z = pointA.z - pointB.z;
+  return output;
+}
+
+Point reverse(Point p)
+{
+  Point output;
+  output.x = -p.x;
+  output.y = -p.y;
+  output.z = -p.z;
+  return output;
+}
+
+Point convertArrayToPoint(double loc[3])
+{
+  Point p;
+  p.x = loc[0];
+  p.y = loc[1];
+  p.z = loc[2];
+  return p;
+}
 
 vector<Ray> rays;
 
@@ -123,18 +207,15 @@ vector<Ray> createRays()
     {
       Ray r;
       // initialize origin
-      r.origin[0] = 0;
-      r.origin[1] = 0;
-      r.origin[2] = 0;
+      r.origin.x = 0;
+      r.origin.y = 0;
+      r.origin.z = 0;
       // initialize direction
-      r.direction[0] = xMax * (x - midWidth) / midWidth;
-      r.direction[1] = yMax * (y - midHeight) / midHeight;
-      r.direction[2] = -depth;
+      r.direction.x = xMax * (x - midWidth) / midWidth;
+      r.direction.y = yMax * (y - midHeight) / midHeight;
+      r.direction.z = -depth;
       // normalize direction
-      double length = sqrt(pow(r.direction[0], 2) + pow(r.direction[1], 2) + pow(r.direction[2], 2));
-      r.direction[0] = r.direction[0] / length;
-      r.direction[1] = r.direction[1] / length;
-      r.direction[2] = r.direction[2] / length;
+      r.direction = normalize(r.direction);
       // set default color
       r.color[0] = 1;
       r.color[1] = 1;
@@ -154,20 +235,16 @@ vector<Ray> createRays()
 
 void testSphereIntersection(Ray &ray)
 {
-  double xd = ray.direction[0];
-  double yd = ray.direction[1];
-  double zd = ray.direction[2];
-  double xo = ray.origin[0];
-  double yo = ray.origin[1];
-  double zo = ray.origin[2];
+  Point direction = ray.direction;
+  Point origin = ray.origin;
   for (int i = 0; i < num_spheres; i++)
   {
     double xc = spheres[i].position[0];
     double yc = spheres[i].position[1];
     double zc = spheres[i].position[2];
     double r = spheres[i].radius;
-    double b = 2 * (xd * (xo - xc) + yd * (yo - yc) + zd * (zo - zc));
-    double c = pow(xo - xc, 2) + pow(yo - yc, 2) + pow(zo - zc, 2) - pow(r, 2);
+    double b = 2 * (direction.x * (origin.x - xc) + direction.y * (origin.y - yc) + direction.z * (origin.z - zc));
+    double c = pow(origin.x - xc, 2) + pow(origin.y - yc, 2) + pow(origin.z - zc, 2) - pow(r, 2);
     if (pow(b, 2) - 4 * c < 0)
     {
       continue;
@@ -203,37 +280,19 @@ void testSphereIntersection(Ray &ray)
 
 void testTriangleIntersection(Ray &ray)
 {
-  double xd = ray.direction[0];
-  double yd = ray.direction[1];
-  double zd = ray.direction[2];
-  double xo = ray.origin[0];
-  double yo = ray.origin[1];
-  double zo = ray.origin[2];
+  Point direction = ray.direction;
+  Point origin = ray.origin;
   for (int i = 0; i < num_triangles; i++)
   {
-    double v1x = triangles[i].v[0].position[0];
-    double v1y = triangles[i].v[0].position[1];
-    double v1z = triangles[i].v[0].position[2];
-    double v2x = triangles[i].v[1].position[0];
-    double v2y = triangles[i].v[1].position[1];
-    double v2z = triangles[i].v[1].position[2];
-    double v3x = triangles[i].v[2].position[0];
-    double v3y = triangles[i].v[2].position[1];
-    double v3z = triangles[i].v[2].position[2];
-    double ebax = v1x - v2x;
-    double ebay = v1y - v2y;
-    double ebaz = v1z - v2z;
-    double ecax = v3x - v2x;
-    double ecay = v3x - v2y;
-    double ecaz = v3x - v2z;
-    double nx = ebay * ecaz - ebaz * ecay;
-    double ny = ebaz * ecax - ebax * ecaz;
-    double nz = ebax * ecay - ebay * ecax;
-    double d = -nx * v1x - ny * v1y - nz * v1z;
-    double tp = -(xo * nx + yo * ny + yo * nz + d) / (xd * nx + yd * ny + yz * nz);
-    double px = xo + xd * tp;
-    double py = yo + yd * tp;
-    double pz = zo + zd * tp;
+    Point v1 = convertArrayToPoint(triangles[i].v[0].position);
+    Point v2 = convertArrayToPoint(triangles[i].v[1].position);
+    Point v3 = convertArrayToPoint(triangles[i].v[2].position);
+    Point edgeBA = deductTwoPoint(v1, v2);
+    Point edgeCA = deductTwoPoint(v3, v2);
+    Point normal = crossProduct(edgeBA, edgeCA);
+    double d = dotProduct(normal, v1);
+    double tp = -(dotProduct(normal, origin) + d) / dotProduct(direction, normal);
+    Point contactPoint = scalarMultiplication(origin, tp);
     // currently the point intersect with plane
   }
 }
