@@ -193,6 +193,26 @@ void plot_pixel_jpeg(int x, int y, unsigned char r, unsigned char g,
 void plot_pixel(int x, int y, unsigned char r, unsigned char g,
                 unsigned char b);
 
+double calculateDiffuseLight(Point l, Point n, double diffuse)
+{
+  double dotLN = dotProduct(l, n);
+  dotLN = dotLN < 0 ? 0 : dotLN;
+  return dotLN * diffuse;
+}
+
+double calculateReflective(Point r, Point v, double speculative, double shi)
+{
+  double dotRV = dotProduct(r, v);
+  dotRV = dotRV < 0 ? 0 : dotRV;
+  return pow(dotRV, shi) * speculative;
+}
+
+double calculateLight(Point l, Point n, Point r, Point v, double diffuse, double speculative, double shi, double color)
+{
+  double output = color * (calculateDiffuseLight(l, n, diffuse) + calculateReflective(r, v, speculative, shi));
+  return output > 1 ? 1 : output;
+}
+
 vector<Ray> createRays()
 {
   vector<Ray> rays;
@@ -287,13 +307,30 @@ void testTriangleIntersection(Ray &ray)
     Point v1 = convertArrayToPoint(triangles[i].v[0].position);
     Point v2 = convertArrayToPoint(triangles[i].v[1].position);
     Point v3 = convertArrayToPoint(triangles[i].v[2].position);
-    Point edgeBA = deductTwoPoint(v1, v2);
-    Point edgeCA = deductTwoPoint(v3, v2);
+    Point edgeBA = deductTwoPoint(v2, v1);
+    Point edgeCA = deductTwoPoint(v3, v1);
     Point normal = crossProduct(edgeBA, edgeCA);
     double d = dotProduct(normal, v1);
     double tp = -(dotProduct(normal, origin) + d) / dotProduct(direction, normal);
-    Point contactPoint = scalarMultiplication(origin, tp);
     // currently the point intersect with plane
+    Point contactPoint = addTwoPoint(origin, scalarMultiplication(direction, tp));
+    if (dotProduct(crossProduct(deductTwoPoint(v2, v1), deductTwoPoint(contactPoint, v1)), normal) >= 0 && dotProduct(crossProduct(deductTwoPoint(v3, v2), deductTwoPoint(contactPoint, v2)), normal) >= 0 && dotProduct(crossProduct(deductTwoPoint(v1, v3), deductTwoPoint(contactPoint, v3)), normal) >= 0)
+    {
+      if (ray.distance == -1)
+      {
+        ray.distance = tp;
+        ray.color[0] = triangles[i].v[0].color_diffuse[0];
+        ray.color[1] = triangles[i].v[0].color_diffuse[1];
+        ray.color[2] = triangles[i].v[0].color_diffuse[2];
+      }
+      else if (tp < ray.distance)
+      {
+        ray.distance = tp;
+        ray.color[0] = triangles[i].v[0].color_diffuse[0];
+        ray.color[1] = triangles[i].v[0].color_diffuse[1];
+        ray.color[2] = triangles[i].v[0].color_diffuse[2];
+      }
+    }
   }
 }
 
@@ -306,6 +343,7 @@ void draw_scene()
   for (int i = 0; i < rays.size(); i++)
   {
     testSphereIntersection(rays[i]);
+    testTriangleIntersection(rays[i]);
   }
   int count = 0;
   for (unsigned int x = 0; x < WIDTH; x++)
