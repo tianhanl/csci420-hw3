@@ -3,7 +3,7 @@
  * Assignment 3 Raytracer
  * Name: Tianhang Liu
  * *************************
- */
+*/
 
 #ifdef WIN32
 #include <windows.h>
@@ -13,45 +13,58 @@
 #include <GL/gl.h>
 #include <GL/glut.h>
 #elif defined(__APPLE__)
-#include <GLUT/glut.h>
 #include <OpenGL/gl.h>
+#include <GLUT/glut.h>
 #endif
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
+#include <vector>
+#include <cmath>
+#include <iostream>
 #ifdef WIN32
 #define strcasecmp _stricmp
 #endif
 
 #include <imageIO.h>
-#include <vector>
-#include <cmath>
-#include <iostream>
 
+using namespace std;
 #define MAX_TRIANGLES 20000
 #define MAX_SPHERES 100
 #define MAX_LIGHTS 100
 
 char *filename = NULL;
 
-// different display modes
+//different display modes
 #define MODE_DISPLAY 1
 #define MODE_JPEG 2
 
 int mode = MODE_DISPLAY;
 
-// you may want to make these smaller for debugging purposes
+//you may want to make these smaller for debugging purposes
 #define WIDTH (640 / 4)
 #define HEIGHT (480 / 4)
 
-// the field of view of the camera
-#define fov 60.0
-#define depth 1.0
+//the field of view of the camera
+#define fov M_PI/3
 
-using namespace std;
+#define TYPE_EMPTY 0;
+#define TYPE_SPHERE 1;
+#define TYPE_TRIANGLE 2;
+
 
 unsigned char buffer[HEIGHT][WIDTH][3];
+
+// Data Structures
+
+struct Point
+{
+  double x;
+  double y;
+  double z;
+};
 
 struct Vertex
 {
@@ -65,6 +78,7 @@ struct Vertex
 struct Triangle
 {
   Vertex v[3];
+  int id;
 };
 
 struct Sphere
@@ -74,12 +88,7 @@ struct Sphere
   double color_specular[3];
   double shininess;
   double radius;
-};
-struct Point
-{
-  double x;
-  double y;
-  double z;
+  int id;
 };
 
 struct Light
@@ -94,25 +103,17 @@ struct Ray
   Point origin;
   double distance;
   double color[3];
+  double intersectionType;
 };
 
-Point normalize(Point p)
-{
+// Point related functionPoint normalize(Point p)
+Point normalize(Point p){
   Point output;
   float length = sqrt(pow(p.x, 2) + pow(p.y, 2) + pow(p.z, 2));
   output.x = p.x / length;
   output.y = p.y / length;
   output.z = p.z / length;
   return output;
-}
-
-Point normalizedCrossProduct(Point p1, Point p2)
-{
-  Point output;
-  output.x = p1.y * p2.z - p1.z * p2.y;
-  output.y = p1.z * p2.x - p1.x * p2.z;
-  output.z = p1.x * p2.y - p1.y * p2.x;
-  return normalize(output);
 }
 
 Point crossProduct(Point p1, Point p2)
@@ -156,15 +157,6 @@ Point deductTwoPoint(Point pointA, Point pointB)
   return output;
 }
 
-Point reverse(Point p)
-{
-  Point output;
-  output.x = -p.x;
-  output.y = -p.y;
-  output.z = -p.z;
-  return output;
-}
-
 Point convertArrayToPoint(double loc[3])
 {
   Point p;
@@ -174,177 +166,64 @@ Point convertArrayToPoint(double loc[3])
   return p;
 }
 
-vector<Ray> rays;
-
 Triangle triangles[MAX_TRIANGLES];
 Sphere spheres[MAX_SPHERES];
 Light lights[MAX_LIGHTS];
+vector<Ray> rays;
 double ambient_light[3];
 
 int num_triangles = 0;
 int num_spheres = 0;
 int num_lights = 0;
-const double pi = std::acos(-1);
 
-void plot_pixel_display(int x, int y, unsigned char r, unsigned char g,
-                        unsigned char b);
-void plot_pixel_jpeg(int x, int y, unsigned char r, unsigned char g,
-                     unsigned char b);
-void plot_pixel(int x, int y, unsigned char r, unsigned char g,
-                unsigned char b);
+void plot_pixel_display(int x, int y, unsigned char r, unsigned char g, unsigned char b);
+void plot_pixel_jpeg(int x, int y, unsigned char r, unsigned char g, unsigned char b);
+void plot_pixel(int x, int y, unsigned char r, unsigned char g, unsigned char b);
 
-double calculateDiffuseLight(Point l, Point n, double diffuse)
-{
-  double dotLN = dotProduct(l, n);
-  dotLN = dotLN < 0 ? 0 : dotLN;
-  return dotLN * diffuse;
+Ray createRay(Point from, Point to) {
+  Ray r;
+  r.origin = from;
+  r.direction = normalize(deductTwoPoint(to, from));
+  r.intersectionType = TYPE_EMPTY;
+  r.color[0] = 0.9;
+  r.color[1] = 0.9;
+  r.color[2] = 0.9;
+  r.distance = -1;
+  return r;
 }
 
-double calculateReflective(Point r, Point v, double speculative, double shi)
-{
-  double dotRV = dotProduct(r, v);
-  dotRV = dotRV < 0 ? 0 : dotRV;
-  return pow(dotRV, shi) * speculative;
-}
+vector<Ray> initRays() {
+    double a = (double) WIDTH / HEIGHT;
+    double xLeft = -a * tan(fov/2);
+    double xRight = a * tan(fov/2);
+    double yBottom = -tan(fov/2);
+    double yTop = tan(fov/2);
 
-double calculateLight(Point l, Point n, Point r, Point v, double diffuse, double speculative, double shi, double color)
-{
-  double output = color * (calculateDiffuseLight(l, n, diffuse) + calculateReflective(r, v, speculative, shi));
-  return output > 1 ? 1 : output;
-}
-
-vector<Ray> createRays()
-{
-  vector<Ray> rays;
-  double a = (double)WIDTH / (double)HEIGHT;
-  double xMax = a * tan(pi / 6);
-  double yMax = tan(pi / 6);
-  double midWidth = (double)WIDTH / 2.0;
-  double midHeight = (double)HEIGHT / 2.0;
-  for (unsigned int x = 0; x < WIDTH; x++)
-  {
-    for (unsigned int y = 0; y < HEIGHT; y++)
-    {
-      Ray r;
-      // initialize origin
-      r.origin.x = 0;
-      r.origin.y = 0;
-      r.origin.z = 0;
-      // initialize direction
-      r.direction.x = xMax * (x - midWidth) / midWidth;
-      r.direction.y = yMax * (y - midHeight) / midHeight;
-      r.direction.z = -depth;
-      // normalize direction
-      r.direction = normalize(r.direction);
-      // set default color
-      r.color[0] = 1;
-      r.color[1] = 1;
-      r.color[2] = 1;
-      r.distance = -1;
-      // cout << "Ray for " << x << " " << y << " is " << r.direction[0] << " " << r.direction[1] << " " << r.direction[2] << endl;
-      rays.push_back(r);
-    }
-  }
-  return rays;
-}
-
-// Calculate b2 – 4c, abort if negative
-// – Compute normal only for closest intersection
-// – Other similar optimizations
-// x = x0 + xdt, y=y0+ydt, z=z0+zdt
-
-void testSphereIntersection(Ray &ray)
-{
-  Point direction = ray.direction;
-  Point origin = ray.origin;
-  for (int i = 0; i < num_spheres; i++)
-  {
-    double xc = spheres[i].position[0];
-    double yc = spheres[i].position[1];
-    double zc = spheres[i].position[2];
-    double r = spheres[i].radius;
-    double b = 2 * (direction.x * (origin.x - xc) + direction.y * (origin.y - yc) + direction.z * (origin.z - zc));
-    double c = pow(origin.x - xc, 2) + pow(origin.y - yc, 2) + pow(origin.z - zc, 2) - pow(r, 2);
-    if (pow(b, 2) - 4 * c < 0)
-    {
-      continue;
-    }
-    else
-    {
-      double t0 = (-b + sqrt(pow(b, 2) - 4 * c)) / 2;
-      double t1 = (-b - sqrt(pow(b, 2) - 4 * c)) / 2;
-      // test if any of them is larger than 0
-      t0 = t0 > 0 ? t0 : 0;
-      t1 = t1 > 0 ? t0 : 0;
-      double tFinal = t0 < t1 ? t0 : t1;
-      if (tFinal != 0)
-      {
-        if (ray.distance == -1)
-        {
-          ray.distance = tFinal;
-          ray.color[0] = spheres[i].color_diffuse[0];
-          ray.color[1] = spheres[i].color_diffuse[1];
-          ray.color[2] = spheres[i].color_diffuse[2];
+    vector<Ray> outputRays;
+    for (int i = 0; i<WIDTH; i++) {
+        for (int j = 0; j<HEIGHT; j++) {
+//            Starts at camera position
+            Point from;
+            from.x = 0;
+            from.y = 0;
+            from.z = 0;
+//            Ends at a point on image plane at -1
+            Point to;
+            to.x = xLeft + (i/(double)WIDTH) * xRight;
+            to.y = yBottom + (j/(double)HEIGHT) * yTop;
+            to.z = -1;
+            outputRays.push_back(createRay(from, to));
         }
-        else if (tFinal < ray.distance)
-        {
-          ray.distance = tFinal;
-          ray.color[0] = spheres[i].color_diffuse[0];
-          ray.color[1] = spheres[i].color_diffuse[1];
-          ray.color[2] = spheres[i].color_diffuse[2];
-        }
-      }
     }
-  }
+    return outputRays;
 }
 
-void testTriangleIntersection(Ray &ray)
-{
-  Point direction = ray.direction;
-  Point origin = ray.origin;
-  for (int i = 0; i < num_triangles; i++)
-  {
-    Point v1 = convertArrayToPoint(triangles[i].v[0].position);
-    Point v2 = convertArrayToPoint(triangles[i].v[1].position);
-    Point v3 = convertArrayToPoint(triangles[i].v[2].position);
-    Point edgeBA = deductTwoPoint(v2, v1);
-    Point edgeCA = deductTwoPoint(v3, v1);
-    Point normal = crossProduct(edgeBA, edgeCA);
-    double d = dotProduct(normal, v1);
-    double tp = -(dotProduct(normal, origin) + d) / dotProduct(direction, normal);
-    // currently the point intersect with plane
-    Point contactPoint = addTwoPoint(origin, scalarMultiplication(direction, tp));
-    if (dotProduct(crossProduct(deductTwoPoint(v2, v1), deductTwoPoint(contactPoint, v1)), normal) >= 0 && dotProduct(crossProduct(deductTwoPoint(v3, v2), deductTwoPoint(contactPoint, v2)), normal) >= 0 && dotProduct(crossProduct(deductTwoPoint(v1, v3), deductTwoPoint(contactPoint, v3)), normal) >= 0)
-    {
-      if (ray.distance == -1)
-      {
-        ray.distance = tp;
-        ray.color[0] = triangles[i].v[0].color_diffuse[0];
-        ray.color[1] = triangles[i].v[0].color_diffuse[1];
-        ray.color[2] = triangles[i].v[0].color_diffuse[2];
-      }
-      else if (tp < ray.distance)
-      {
-        ray.distance = tp;
-        ray.color[0] = triangles[i].v[0].color_diffuse[0];
-        ray.color[1] = triangles[i].v[0].color_diffuse[1];
-        ray.color[2] = triangles[i].v[0].color_diffuse[2];
-      }
-    }
-  }
-}
 
-// MODIFY THIS FUNCTION
-
+//MODIFY THIS FUNCTION
 void draw_scene()
 {
-  rays = createRays();
-  // a simple test output
-  for (int i = 0; i < rays.size(); i++)
-  {
-    testSphereIntersection(rays[i]);
-    testTriangleIntersection(rays[i]);
-  }
+  rays = initRays();
+  //a simple test output
   int count = 0;
   for (unsigned int x = 0; x < WIDTH; x++)
   {
@@ -352,7 +231,7 @@ void draw_scene()
     glBegin(GL_POINTS);
     for (unsigned int y = 0; y < HEIGHT; y++)
     {
-      plot_pixel(x, y, rays[count].color[0] * 256.0, rays[count].color[1] * 256.0, rays[count].color[2] * 256.0);
+      plot_pixel(x, y, rays[count].color[0] * 256, rays[count].color[1] * 256, rays[count].color[2] * 256);
       count++;
     }
     glEnd();
@@ -362,23 +241,20 @@ void draw_scene()
   fflush(stdout);
 }
 
-void plot_pixel_display(int x, int y, unsigned char r, unsigned char g,
-                        unsigned char b)
+void plot_pixel_display(int x, int y, unsigned char r, unsigned char g, unsigned char b)
 {
   glColor3f(((float)r) / 255.0f, ((float)g) / 255.0f, ((float)b) / 255.0f);
   glVertex2i(x, y);
 }
 
-void plot_pixel_jpeg(int x, int y, unsigned char r, unsigned char g,
-                     unsigned char b)
+void plot_pixel_jpeg(int x, int y, unsigned char r, unsigned char g, unsigned char b)
 {
   buffer[y][x][0] = r;
   buffer[y][x][1] = g;
   buffer[y][x][2] = b;
 }
 
-void plot_pixel(int x, int y, unsigned char r, unsigned char g,
-                unsigned char b)
+void plot_pixel(int x, int y, unsigned char r, unsigned char g, unsigned char b)
 {
   plot_pixel_display(x, y, r, g, b);
   if (mode == MODE_JPEG)
@@ -462,6 +338,7 @@ int loadScene(char *argv)
         parse_doubles(file, "spe:", t.v[j].color_specular);
         parse_shi(file, &t.v[j].shininess);
       }
+      t.id = i;
 
       if (num_triangles == MAX_TRIANGLES)
       {
@@ -479,6 +356,7 @@ int loadScene(char *argv)
       parse_doubles(file, "dif:", s.color_diffuse);
       parse_doubles(file, "spe:", s.color_specular);
       parse_shi(file, &s.shininess);
+      s.id = i;
 
       if (num_spheres == MAX_SPHERES)
       {
@@ -509,7 +387,9 @@ int loadScene(char *argv)
   return 0;
 }
 
-void display() {}
+void display()
+{
+}
 
 void init()
 {
@@ -524,7 +404,7 @@ void init()
 
 void idle()
 {
-  // hack to make it only draw once
+  //hack to make it only draw once
   static int once = 0;
   if (!once)
   {
