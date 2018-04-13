@@ -104,6 +104,7 @@ struct Ray
   double distance;
   double color[3];
   double intersectionType;
+  int intersectionItemId;
 };
 
 // Point related functionPoint normalize(Point p)
@@ -179,6 +180,7 @@ int num_lights = 0;
 void plot_pixel_display(int x, int y, unsigned char r, unsigned char g, unsigned char b);
 void plot_pixel_jpeg(int x, int y, unsigned char r, unsigned char g, unsigned char b);
 void plot_pixel(int x, int y, unsigned char r, unsigned char g, unsigned char b);
+bool debug = true;
 
 Ray createRay(Point from, Point to) {
   Ray r;
@@ -209,8 +211,8 @@ vector<Ray> initRays() {
             from.z = 0;
 //            Ends at a point on image plane at -1
             Point to;
-            to.x = xLeft + (i/(double)WIDTH) * xRight;
-            to.y = yBottom + (j/(double)HEIGHT) * yTop;
+            to.x = xLeft + (i/(double)WIDTH) * 2 * xRight;
+            to.y = yBottom + (j/(double)HEIGHT) * 2 * yTop;
             to.z = -1;
             outputRays.push_back(createRay(from, to));
         }
@@ -218,11 +220,48 @@ vector<Ray> initRays() {
     return outputRays;
 }
 
+int testRaySphereIntersection(Ray& r, Sphere s) {
+  Point o = r.origin;
+  Point d = r.direction;
+//  center of sphere
+  Point sc = convertArrayToPoint(s.position);
+  double radius = s.radius;
+  double b = 2 * (d.x * (o.x - sc.x) + d.y * (o.y - sc.y) + d.z * (o.z - sc.z));
+  double c = pow((o.x - sc.x), 2) + pow((o.y - sc.y), 2) + pow((o.z - sc.z), 2) - pow(radius,2);
+  double mid = pow(b, 2) - 4*c;
+  if(mid < 0) {
+    return -1;
+  }
+  double t0 = (-b + sqrt(mid))/2;
+  double t1 = (-b - sqrt(mid))/2;
+  t0 = t0<0?0:t0;
+  t1 = t1<0?0:t1;
+  if(debug) {
+    printf("For ray to point (%f, %f, %f ) \n", d.x, d.y, d.z );
+    printf("t0 is %f, t1 is %f  \n",  t0, t1 );
+  }
+  double finalT = t0<t1?t0:t1;
+  if(r.distance == -1 || r.distance > finalT) {
+    r.intersectionType = TYPE_SPHERE;
+    r.intersectionItemId = s.id;
+    r.distance = finalT;
+    r.color[0] = s.color_diffuse[0];
+    r.color[1] = s.color_diffuse[1];
+    r.color[2] = s.color_diffuse[2];
+  }
+  return -1;
+}
+
 
 //MODIFY THIS FUNCTION
 void draw_scene()
 {
   rays = initRays();
+  for(int i = 0; i<rays.size(); i++) {
+    for (int j = 0; j < num_spheres; j++) {
+      testRaySphereIntersection(rays[i],spheres[j]);
+    }
+  }
   //a simple test output
   int count = 0;
   for (unsigned int x = 0; x < WIDTH; x++)
