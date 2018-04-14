@@ -45,8 +45,8 @@ char *filename = NULL;
 int mode = MODE_DISPLAY;
 
 //you may want to make these smaller for debugging purposes
-#define WIDTH (640 / 4)
-#define HEIGHT (480 / 4)
+#define WIDTH (640)
+#define HEIGHT (480)
 
 //the field of view of the camera
 #define fov M_PI / 3
@@ -116,6 +116,11 @@ Point normalize(Point p)
     output.y = p.y / length;
     output.z = p.z / length;
     return output;
+}
+
+double pointLength(Point p)
+{
+    return sqrt(pow(p.x, 2) + pow(p.y, 2) + pow(p.z, 2));
 }
 
 Point crossProduct(Point p1, Point p2)
@@ -331,9 +336,50 @@ int testRayTriangleIntersection(Ray &r, Triangle t)
         if (r.distance == -1 || tp < r.distance)
         {
             r.distance = tp;
-            r.color[0] = t.v[0].color_diffuse[0];
-            r.color[1] = t.v[0].color_diffuse[1];
-            r.color[2] = t.v[0].color_diffuse[2];
+            r.color[0] = ambient_light[0];
+            r.color[1] = ambient_light[1];
+            r.color[2] = ambient_light[2];
+            double areaABC = 0.5 * pointLength(crossProduct(edgeBA, edgeCA));
+            double areaPBC = dotProduct(crossProduct(deductTwoPoint(c, b), deductTwoPoint(contactPoint, b)), normal);
+            double areaAPC = dotProduct(crossProduct(deductTwoPoint(a, c), deductTwoPoint(contactPoint, c)), normal);
+            double areaABP = dotProduct(crossProduct(deductTwoPoint(b, a), deductTwoPoint(contactPoint, a)), normal);
+            double alpha = areaPBC / areaABC;
+            double beta = areaAPC / areaABC;
+            double y = 1 - alpha - beta;
+            Point na = convertArrayToPoint(t.v[0].normal);
+            Point nb = convertArrayToPoint(t.v[1].normal);
+            Point nc = convertArrayToPoint(t.v[2].normal);
+            Point n = normalize(addTwoPoint(addTwoPoint(scalarMultiplication(na, alpha), scalarMultiplication(nb, beta)), scalarMultiplication(nc, y)));
+            double diffuseColor[3];
+            double specularColor[3];
+            diffuseColor[0] = alpha * t.v[0].color_diffuse[0] + beta * t.v[1].color_diffuse[0] + y * t.v[2].color_diffuse[0];
+            diffuseColor[1] = alpha * t.v[0].color_diffuse[1] + beta * t.v[1].color_diffuse[1] + y * t.v[2].color_diffuse[1];
+            diffuseColor[2] = alpha * t.v[0].color_diffuse[2] + beta * t.v[1].color_diffuse[2] + y * t.v[2].color_diffuse[2];
+
+            specularColor[0] = alpha * t.v[0].color_specular[0] + beta * t.v[1].color_specular[0] + y * t.v[2].color_specular[0];
+            specularColor[1] = alpha * t.v[0].color_specular[1] + beta * t.v[1].color_specular[1] + y * t.v[2].color_specular[1];
+            specularColor[2] = alpha * t.v[0].color_specular[2] + beta * t.v[1].color_specular[2] + y * t.v[2].color_specular[2];
+
+            for (int i = 0; i < num_lights; i++)
+            {
+                Point intersectionPoint = contactPoint;
+                Point l = normalize(deductTwoPoint(convertArrayToPoint(lights[i].position), intersectionPoint));
+                double ln = dotProduct(l, n);
+                ln = ln > 0 ? ln : 0;
+                r.color[0] += lights[i].color[0] * diffuseColor[0] * ln;
+                r.color[1] += lights[i].color[1] * diffuseColor[1] * ln;
+                r.color[2] += lights[i].color[2] * diffuseColor[2] * ln;
+                Point v = normalize(deductTwoPoint(r.origin, intersectionPoint));
+                Point reflection = deductTwoPoint(scalarMultiplication(n, 2 * dotProduct(l, n)), l);
+                double rv = dotProduct(reflection, v);
+                rv = rv > 0 ? rv : 0;
+                r.color[0] += lights[i].color[0] * specularColor[0] * pow(rv, t.v[0].shininess);
+                r.color[1] += lights[i].color[1] * specularColor[1] * pow(rv, t.v[0].shininess);
+                r.color[2] += lights[i].color[2] * specularColor[2] * pow(rv, t.v[0].shininess);
+            }
+            r.color[0] = r.color[0] > 1 ? 0.99 : r.color[0];
+            r.color[1] = r.color[1] > 1 ? 0.99 : r.color[1];
+            r.color[2] = r.color[2] > 1 ? 0.99 : r.color[2];
         }
     }
     return -1;
