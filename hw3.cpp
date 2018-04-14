@@ -317,12 +317,16 @@ int testRayTriangleIntersection(Ray &r, Triangle t)
     Point c = convertArrayToPoint(t.v[2].position);
     Point edgeBA = deductTwoPoint(b, a);
     Point edgeCA = deductTwoPoint(c, a);
-    Point normal = crossProduct(edgeBA, edgeCA);
+    Point normal = normalize(crossProduct(edgeBA, edgeCA));
     double d = dotProduct(normal, a);
     double tp = (d - dotProduct(normal, origin)) / dotProduct(direction, normal);
     // currently the point intersect with plane
     Point contactPoint = addTwoPoint(origin, scalarMultiplication(direction, tp));
-    if (dotProduct(crossProduct(deductTwoPoint(b, a), deductTwoPoint(contactPoint, a)), normal) >= 0 && dotProduct(crossProduct(deductTwoPoint(c, b), deductTwoPoint(contactPoint, b)), normal) >= 0 && dotProduct(crossProduct(deductTwoPoint(a, c), deductTwoPoint(contactPoint, c)), normal) >= 0)
+    bool testBA = dotProduct(crossProduct(deductTwoPoint(b, a), deductTwoPoint(contactPoint, a)), normal) >= 0;
+    bool testCB = dotProduct(crossProduct(deductTwoPoint(c, b), deductTwoPoint(contactPoint, b)), normal) >= 0;
+    bool testAC = dotProduct(crossProduct(deductTwoPoint(a, c), deductTwoPoint(contactPoint, c)), normal) >= 0;
+
+    if (testBA && testCB && testAC)
     {
         if (r.distance == -1 || tp < r.distance)
         {
