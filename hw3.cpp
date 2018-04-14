@@ -192,9 +192,9 @@ Ray createRay(Point from, Point to)
     r.origin = from;
     r.direction = normalize(deductTwoPoint(to, from));
     r.intersectionType = TYPE_EMPTY;
-    r.color[0] = 0.0;
-    r.color[1] = 0.0;
-    r.color[2] = 0.0;
+    r.color[0] = 0.99;
+    r.color[1] = 0.99;
+    r.color[2] = 0.99;
     r.distance = -1;
     return r;
 }
@@ -276,6 +276,9 @@ int testRaySphereIntersection(Ray &r, Sphere s)
     double finalT = t0 < t1 ? t0 : t1;
     if (r.distance == -1 || r.distance > finalT)
     {
+        r.color[0] = ambient_light[0];
+        r.color[1] = ambient_light[1];
+        r.color[2] = ambient_light[2];
         r.intersectionType = TYPE_SPHERE;
         r.intersectionItemId = s.id;
         r.distance = finalT;
@@ -293,20 +296,42 @@ int testRaySphereIntersection(Ray &r, Sphere s)
             Point reflection = deductTwoPoint(scalarMultiplication(n, 2 * dotProduct(l, n)), l);
             double rv = dotProduct(reflection, v);
             rv = rv > 0 ? rv : 0;
-            r.color[0] += lights[i].color[0] * s.color_specular[0] * rv;
-            r.color[1] += lights[i].color[1] * s.color_specular[1] * rv;
-            r.color[2] += lights[i].color[2] * s.color_specular[2] * rv;
+            r.color[0] += lights[i].color[0] * s.color_specular[0] * pow(rv, s.shininess);
+            r.color[1] += lights[i].color[1] * s.color_specular[1] * pow(rv, s.shininess);
+            r.color[2] += lights[i].color[2] * s.color_specular[2] * pow(rv, s.shininess);
         }
-        r.color[0] = r.color[0] > 1 ? 1 : r.color[0];
-        r.color[1] = r.color[1] > 1 ? 1 : r.color[1];
-        r.color[2] = r.color[2] > 1 ? 1 : r.color[2];
+        r.color[0] = r.color[0] > 1 ? 0.99 : r.color[0];
+        r.color[1] = r.color[1] > 1 ? 0.99 : r.color[1];
+        r.color[2] = r.color[2] > 1 ? 0.99 : r.color[2];
     }
     return -1;
 }
 
-int testRayTriangleIntersection(Ray &r, Sphere s)
+int testRayTriangleIntersection(Ray &r, Triangle t)
 {
 
+    Point direction = r.direction;
+    Point origin = r.origin;
+    Point a = convertArrayToPoint(t.v[0].position);
+    Point b = convertArrayToPoint(t.v[1].position);
+    Point c = convertArrayToPoint(t.v[2].position);
+    Point edgeBA = deductTwoPoint(b, a);
+    Point edgeCA = deductTwoPoint(c, a);
+    Point normal = crossProduct(edgeBA, edgeCA);
+    double d = dotProduct(normal, a);
+    double tp = (d - dotProduct(normal, origin)) / dotProduct(direction, normal);
+    // currently the point intersect with plane
+    Point contactPoint = addTwoPoint(origin, scalarMultiplication(direction, tp));
+    if (dotProduct(crossProduct(deductTwoPoint(b, a), deductTwoPoint(contactPoint, a)), normal) >= 0 && dotProduct(crossProduct(deductTwoPoint(c, b), deductTwoPoint(contactPoint, b)), normal) >= 0 && dotProduct(crossProduct(deductTwoPoint(a, c), deductTwoPoint(contactPoint, c)), normal) >= 0)
+    {
+        if (r.distance == -1 || tp < r.distance)
+        {
+            r.distance = tp;
+            r.color[0] = t.v[0].color_diffuse[0];
+            r.color[1] = t.v[0].color_diffuse[1];
+            r.color[2] = t.v[0].color_diffuse[2];
+        }
+    }
     return -1;
 }
 
@@ -330,6 +355,11 @@ void draw_scene()
         for (int j = 0; j < num_spheres; j++)
         {
             testRaySphereIntersection(rays[i], spheres[j]);
+            //      calculateIllumination(rays[i]);
+        }
+        for (int j = 0; j < num_triangles; j++)
+        {
+            testRayTriangleIntersection(rays[i], triangles[j]);
             //      calculateIllumination(rays[i]);
         }
     }
