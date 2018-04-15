@@ -45,8 +45,8 @@ char *filename = NULL;
 int mode = MODE_DISPLAY;
 
 //you may want to make these smaller for debugging purposes
-#define WIDTH (640)
-#define HEIGHT (480)
+#define WIDTH (640 / 4)
+#define HEIGHT (480 / 4)
 
 //the field of view of the camera
 #define fov M_PI / 3
@@ -254,6 +254,61 @@ void calculateSphereIllumination(Ray &r)
         }
     }
 }
+bool testShadowRaySphereIntersection(Ray r, Sphere s)
+{
+    Point o = r.origin;
+    Point d = r.direction;
+    //  center of sphere
+    Point sc = convertArrayToPoint(s.position);
+    double radius = s.radius;
+    double b = 2 * (d.x * (o.x - sc.x) + d.y * (o.y - sc.y) + d.z * (o.z - sc.z));
+    double c = pow((o.x - sc.x), 2) + pow((o.y - sc.y), 2) + pow((o.z - sc.z), 2) - pow(radius, 2);
+    double mid = pow(b, 2) - 4 * c;
+    if (mid < 0)
+    {
+        return false;
+    }
+    double t0 = (-b + sqrt(mid)) / 2;
+    double t1 = (-b - sqrt(mid)) / 2;
+    t0 = t0 < 0 ? 0 : t0;
+    t1 = t1 < 0 ? 0 : t1;
+    if (debug)
+    {
+        printf("For ray to point (%f, %f, %f ) \n", d.x, d.y, d.z);
+        printf("t0 is %f, t1 is %f  \n", t0, t1);
+    }
+    double finalT = t0 < t1 ? t0 : t1;
+    return finalT > 0;
+}
+
+bool testShadowRayTriangleIntersection(Ray r, Triangle t)
+{
+    Point direction = r.direction;
+    Point origin = r.origin;
+    Point a = convertArrayToPoint(t.v[0].position);
+    Point b = convertArrayToPoint(t.v[1].position);
+    Point c = convertArrayToPoint(t.v[2].position);
+    Point edgeBA = deductTwoPoint(b, a);
+    Point edgeCA = deductTwoPoint(c, a);
+    Point normal = normalize(crossProduct(edgeBA, edgeCA));
+    double d = dotProduct(normal, a);
+    double tp = (d - dotProduct(normal, origin)) / dotProduct(direction, normal);
+    if (tp <= 0)
+    {
+        return false;
+    }
+    // currently the point intersect with plane
+    Point contactPoint = addTwoPoint(origin, scalarMultiplication(direction, tp));
+    bool testBA = dotProduct(crossProduct(deductTwoPoint(b, a), deductTwoPoint(contactPoint, a)), normal) >= 0;
+    bool testCB = dotProduct(crossProduct(deductTwoPoint(c, b), deductTwoPoint(contactPoint, b)), normal) >= 0;
+    bool testAC = dotProduct(crossProduct(deductTwoPoint(a, c), deductTwoPoint(contactPoint, c)), normal) >= 0;
+
+    if (testBA && testCB && testAC)
+    {
+        return true;
+    }
+    return false;
+}
 
 int testRaySphereIntersection(Ray &r, Sphere s)
 {
@@ -291,19 +346,49 @@ int testRaySphereIntersection(Ray &r, Sphere s)
         {
             Point intersectionPoint = addTwoPoint(r.origin, scalarMultiplication(r.direction, r.distance));
             Point l = normalize(deductTwoPoint(convertArrayToPoint(lights[i].position), intersectionPoint));
-            Point n = normalize(deductTwoPoint(intersectionPoint, sc));
-            double ln = dotProduct(l, n);
-            ln = ln > 0 ? ln : 0;
-            r.color[0] += lights[i].color[0] * s.color_diffuse[0] * ln;
-            r.color[1] += lights[i].color[1] * s.color_diffuse[1] * ln;
-            r.color[2] += lights[i].color[2] * s.color_diffuse[2] * ln;
-            Point v = normalize(deductTwoPoint(r.origin, intersectionPoint));
-            Point reflection = deductTwoPoint(scalarMultiplication(n, 2 * dotProduct(l, n)), l);
-            double rv = dotProduct(reflection, v);
-            rv = rv > 0 ? rv : 0;
-            r.color[0] += lights[i].color[0] * s.color_specular[0] * pow(rv, s.shininess);
-            r.color[1] += lights[i].color[1] * s.color_specular[1] * pow(rv, s.shininess);
-            r.color[2] += lights[i].color[2] * s.color_specular[2] * pow(rv, s.shininess);
+            Ray shadowRay = createRay(intersectionPoint, convertArrayToPoint(lights[i].position));
+            bool isBlocked = false;
+            for (int j = 0; j < num_spheres; j++)
+            {
+                if (spheres[j].id != s.id)
+                {
+                    isBlocked = testShadowRaySphereIntersection(shadowRay, spheres[j]);
+                    if (isBlocked)
+                    {
+                        break;
+                    }
+                }
+            }
+            if (!isBlocked)
+            {
+                for (int j = 0; j < num_triangles; j++)
+                {
+                    if (triangles[j].id != s.id)
+                    {
+                        isBlocked = testShadowRayTriangleIntersection(shadowRay, triangles[j]);
+                        if (isBlocked)
+                        {
+                            break;
+                        }
+                    }
+                }
+            }
+            if (!isBlocked)
+            {
+                Point n = normalize(deductTwoPoint(intersectionPoint, sc));
+                double ln = dotProduct(l, n);
+                ln = ln > 0 ? ln : 0;
+                r.color[0] += lights[i].color[0] * s.color_diffuse[0] * ln;
+                r.color[1] += lights[i].color[1] * s.color_diffuse[1] * ln;
+                r.color[2] += lights[i].color[2] * s.color_diffuse[2] * ln;
+                Point v = normalize(deductTwoPoint(r.origin, intersectionPoint));
+                Point reflection = deductTwoPoint(scalarMultiplication(n, 2 * dotProduct(l, n)), l);
+                double rv = dotProduct(reflection, v);
+                rv = rv > 0 ? rv : 0;
+                r.color[0] += lights[i].color[0] * s.color_specular[0] * pow(rv, s.shininess);
+                r.color[1] += lights[i].color[1] * s.color_specular[1] * pow(rv, s.shininess);
+                r.color[2] += lights[i].color[2] * s.color_specular[2] * pow(rv, s.shininess);
+            }
         }
         r.color[0] = r.color[0] > 1 ? 0.99 : r.color[0];
         r.color[1] = r.color[1] > 1 ? 0.99 : r.color[1];
@@ -364,18 +449,48 @@ int testRayTriangleIntersection(Ray &r, Triangle t)
             {
                 Point intersectionPoint = contactPoint;
                 Point l = normalize(deductTwoPoint(convertArrayToPoint(lights[i].position), intersectionPoint));
-                double ln = dotProduct(l, n);
-                ln = ln > 0 ? ln : 0;
-                r.color[0] += lights[i].color[0] * diffuseColor[0] * ln;
-                r.color[1] += lights[i].color[1] * diffuseColor[1] * ln;
-                r.color[2] += lights[i].color[2] * diffuseColor[2] * ln;
-                Point v = normalize(deductTwoPoint(r.origin, intersectionPoint));
-                Point reflection = deductTwoPoint(scalarMultiplication(n, 2 * dotProduct(l, n)), l);
-                double rv = dotProduct(reflection, v);
-                rv = rv > 0 ? rv : 0;
-                r.color[0] += lights[i].color[0] * specularColor[0] * pow(rv, t.v[0].shininess);
-                r.color[1] += lights[i].color[1] * specularColor[1] * pow(rv, t.v[0].shininess);
-                r.color[2] += lights[i].color[2] * specularColor[2] * pow(rv, t.v[0].shininess);
+                Ray shadowRay = createRay(intersectionPoint, convertArrayToPoint(lights[i].position));
+                bool isBlocked = false;
+                for (int j = 0; j < num_spheres; j++)
+                {
+                    if (spheres[j].id != t.id)
+                    {
+                        isBlocked = testShadowRaySphereIntersection(shadowRay, spheres[j]);
+                        if (isBlocked)
+                        {
+                            break;
+                        }
+                    }
+                }
+                if (!isBlocked)
+                {
+                    for (int j = 0; j < num_triangles; j++)
+                    {
+                        if (triangles[j].id != t.id)
+                        {
+                            isBlocked = testShadowRayTriangleIntersection(shadowRay, triangles[j]);
+                            if (isBlocked)
+                            {
+                                break;
+                            }
+                        }
+                    }
+                }
+                if (!isBlocked)
+                {
+                    double ln = dotProduct(l, n);
+                    ln = ln > 0 ? ln : 0;
+                    r.color[0] += lights[i].color[0] * diffuseColor[0] * ln;
+                    r.color[1] += lights[i].color[1] * diffuseColor[1] * ln;
+                    r.color[2] += lights[i].color[2] * diffuseColor[2] * ln;
+                    Point v = normalize(deductTwoPoint(r.origin, intersectionPoint));
+                    Point reflection = deductTwoPoint(scalarMultiplication(n, 2 * dotProduct(l, n)), l);
+                    double rv = dotProduct(reflection, v);
+                    rv = rv > 0 ? rv : 0;
+                    r.color[0] += lights[i].color[0] * specularColor[0] * pow(rv, t.v[0].shininess);
+                    r.color[1] += lights[i].color[1] * specularColor[1] * pow(rv, t.v[0].shininess);
+                    r.color[2] += lights[i].color[2] * specularColor[2] * pow(rv, t.v[0].shininess);
+                }
             }
             r.color[0] = r.color[0] > 1 ? 0.99 : r.color[0];
             r.color[1] = r.color[1] > 1 ? 0.99 : r.color[1];
