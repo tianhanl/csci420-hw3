@@ -335,26 +335,20 @@ int testRaySphereIntersection(Ray &r, Sphere s)
             bool isBlocked = false;
             for (int j = 0; j < num_spheres; j++)
             {
-                if (spheres[j].id != s.id)
+                isBlocked = testShadowRaySphereIntersection(shadowRay, spheres[j], tl);
+                if (isBlocked)
                 {
-                    isBlocked = testShadowRaySphereIntersection(shadowRay, spheres[j], tl);
-                    if (isBlocked)
-                    {
-                        break;
-                    }
+                    break;
                 }
             }
             if (!isBlocked)
             {
                 for (int j = 0; j < num_triangles; j++)
                 {
-                    if (triangles[j].id != s.id)
+                    isBlocked = testShadowRayTriangleIntersection(shadowRay, triangles[j], tl);
+                    if (isBlocked)
                     {
-                        isBlocked = testShadowRayTriangleIntersection(shadowRay, triangles[j], tl);
-                        if (isBlocked)
-                        {
-                            break;
-                        }
+                        break;
                     }
                 }
             }
@@ -439,26 +433,20 @@ int testRayTriangleIntersection(Ray &r, Triangle t)
                 bool isBlocked = false;
                 for (int j = 0; j < num_spheres; j++)
                 {
-                    if (spheres[j].id != t.id)
+                    isBlocked = testShadowRaySphereIntersection(shadowRay, spheres[j], tl);
+                    if (isBlocked)
                     {
-                        isBlocked = testShadowRaySphereIntersection(shadowRay, spheres[j], tl);
-                        if (isBlocked)
-                        {
-                            break;
-                        }
+                        break;
                     }
                 }
                 if (!isBlocked)
                 {
                     for (int j = 0; j < num_triangles; j++)
                     {
-                        if (triangles[j].id != t.id)
+                        isBlocked = testShadowRayTriangleIntersection(shadowRay, triangles[j], tl);
+                        if (isBlocked)
                         {
-                            isBlocked = testShadowRayTriangleIntersection(shadowRay, triangles[j], tl);
-                            if (isBlocked)
-                            {
-                                break;
-                            }
+                            break;
                         }
                     }
                 }
