@@ -54,6 +54,7 @@ int mode = MODE_DISPLAY;
 int TYPE_EMPTY = 0;
 int TYPE_SPHERE = 1;
 int TYPE_TRIANGLE = 2;
+double epsilon = 0.001;
 
 unsigned char buffer[HEIGHT][WIDTH][3];
 
@@ -233,28 +234,7 @@ vector<Ray> initRays()
     return outputRays;
 }
 
-void calculateSphereIllumination(Ray &r)
-{
-    for (int i = 0; i < num_lights; i++)
-    {
-        Point l = convertArrayToPoint(lights[i].position);
-        Point intersectionPoint = addTwoPoint(r.origin, scalarMultiplication(r.direction, r.distance));
-        for (int j = 0; j < num_spheres; j++)
-        {
-            if (spheres[j].id == r.intersectionItemId)
-            {
-                Point sc = convertArrayToPoint(spheres[j].position);
-                Point n = normalize(deductTwoPoint(intersectionPoint, sc));
-                double ln = dotProduct(l, n);
-                ln = ln > 0 ? ln : 0;
-                r.color[0] += lights[i].color[0] * spheres[j].color_diffuse[0] * ln;
-                r.color[1] += lights[i].color[1] * spheres[j].color_diffuse[1] * ln;
-                r.color[2] += lights[i].color[2] * spheres[j].color_diffuse[2] * ln;
-            }
-        }
-    }
-}
-bool testShadowRaySphereIntersection(Ray r, Sphere s)
+bool testShadowRaySphereIntersection(Ray r, Sphere s, double tl)
 {
     Point o = r.origin;
     Point d = r.direction;
@@ -278,10 +258,14 @@ bool testShadowRaySphereIntersection(Ray r, Sphere s)
         printf("t0 is %f, t1 is %f  \n", t0, t1);
     }
     double finalT = t0 < t1 ? t0 : t1;
-    return finalT > 0;
+    if (finalT > tl)
+    {
+        return false;
+    }
+    return finalT > epsilon;
 }
 
-bool testShadowRayTriangleIntersection(Ray r, Triangle t)
+bool testShadowRayTriangleIntersection(Ray r, Triangle t, double tl)
 {
     Point direction = r.direction;
     Point origin = r.origin;
@@ -293,7 +277,7 @@ bool testShadowRayTriangleIntersection(Ray r, Triangle t)
     Point normal = normalize(crossProduct(edgeBA, edgeCA));
     double d = dotProduct(normal, a);
     double tp = (d - dotProduct(normal, origin)) / dotProduct(direction, normal);
-    if (tp <= 0)
+    if (tp < epsilon || tp > tl)
     {
         return false;
     }
@@ -346,13 +330,14 @@ int testRaySphereIntersection(Ray &r, Sphere s)
         {
             Point intersectionPoint = addTwoPoint(r.origin, scalarMultiplication(r.direction, r.distance));
             Point l = normalize(deductTwoPoint(convertArrayToPoint(lights[i].position), intersectionPoint));
+            double tl = pointLength(deductTwoPoint(convertArrayToPoint(lights[i].position), intersectionPoint));
             Ray shadowRay = createRay(intersectionPoint, convertArrayToPoint(lights[i].position));
             bool isBlocked = false;
             for (int j = 0; j < num_spheres; j++)
             {
                 if (spheres[j].id != s.id)
                 {
-                    isBlocked = testShadowRaySphereIntersection(shadowRay, spheres[j]);
+                    isBlocked = testShadowRaySphereIntersection(shadowRay, spheres[j], tl);
                     if (isBlocked)
                     {
                         break;
@@ -365,7 +350,7 @@ int testRaySphereIntersection(Ray &r, Sphere s)
                 {
                     if (triangles[j].id != s.id)
                     {
-                        isBlocked = testShadowRayTriangleIntersection(shadowRay, triangles[j]);
+                        isBlocked = testShadowRayTriangleIntersection(shadowRay, triangles[j], tl);
                         if (isBlocked)
                         {
                             break;
@@ -424,7 +409,7 @@ int testRayTriangleIntersection(Ray &r, Triangle t)
             r.color[0] = ambient_light[0];
             r.color[1] = ambient_light[1];
             r.color[2] = ambient_light[2];
-            double areaABC = 0.5 * pointLength(crossProduct(edgeBA, edgeCA));
+            double areaABC = dotProduct(crossProduct(edgeBA, edgeCA), normal);
             double areaPBC = dotProduct(crossProduct(deductTwoPoint(c, b), deductTwoPoint(contactPoint, b)), normal);
             double areaAPC = dotProduct(crossProduct(deductTwoPoint(a, c), deductTwoPoint(contactPoint, c)), normal);
             double areaABP = dotProduct(crossProduct(deductTwoPoint(b, a), deductTwoPoint(contactPoint, a)), normal);
@@ -449,13 +434,14 @@ int testRayTriangleIntersection(Ray &r, Triangle t)
             {
                 Point intersectionPoint = contactPoint;
                 Point l = normalize(deductTwoPoint(convertArrayToPoint(lights[i].position), intersectionPoint));
+                double tl = pointLength(deductTwoPoint(convertArrayToPoint(lights[i].position), intersectionPoint));
                 Ray shadowRay = createRay(intersectionPoint, convertArrayToPoint(lights[i].position));
                 bool isBlocked = false;
                 for (int j = 0; j < num_spheres; j++)
                 {
                     if (spheres[j].id != t.id)
                     {
-                        isBlocked = testShadowRaySphereIntersection(shadowRay, spheres[j]);
+                        isBlocked = testShadowRaySphereIntersection(shadowRay, spheres[j], tl);
                         if (isBlocked)
                         {
                             break;
@@ -468,7 +454,7 @@ int testRayTriangleIntersection(Ray &r, Triangle t)
                     {
                         if (triangles[j].id != t.id)
                         {
-                            isBlocked = testShadowRayTriangleIntersection(shadowRay, triangles[j]);
+                            isBlocked = testShadowRayTriangleIntersection(shadowRay, triangles[j], tl);
                             if (isBlocked)
                             {
                                 break;
@@ -498,17 +484,6 @@ int testRayTriangleIntersection(Ray &r, Triangle t)
         }
     }
     return -1;
-}
-
-void calculateIllumination(Ray &r)
-{
-    if (debug)
-    {
-        printf("Type of intersection for r is %d", r.intersectionType);
-    }
-    if (r.intersectionType == TYPE_SPHERE)
-    {
-    }
 }
 
 //MODIFY THIS FUNCTION
