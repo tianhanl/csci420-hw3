@@ -45,8 +45,8 @@ char *filename = NULL;
 int mode = MODE_DISPLAY;
 
 //you may want to make these smaller for debugging purposes
-#define WIDTH (640 / 4)
-#define HEIGHT (480 / 4)
+#define WIDTH (640)
+#define HEIGHT (480)
 
 //the field of view of the camera
 #define fov M_PI / 3
@@ -177,7 +177,11 @@ Point convertArrayToPoint(double loc[3])
 Triangle triangles[MAX_TRIANGLES];
 Sphere spheres[MAX_SPHERES];
 Light lights[MAX_LIGHTS];
-vector<Ray> rays;
+vector<Ray> topLeftRays;
+vector<Ray> topRightRays;
+vector<Ray> bottomLeftRays;
+vector<Ray> bottomRightRays;
+bool shouldAntialiasing = true;
 double ambient_light[3];
 
 int num_triangles = 0;
@@ -205,7 +209,12 @@ Ray createRay(Point from, Point to)
     return r;
 }
 
-vector<Ray> initRays()
+int topLeft = 0;
+int topRight = 1;
+int bottomLeft = 2;
+int bottomRight = 3;
+
+vector<Ray> initRays(int loc)
 {
     double a = (double)WIDTH / HEIGHT;
     double xLeft = -a * tan(fov / 2);
@@ -213,10 +222,15 @@ vector<Ray> initRays()
     double yBottom = -tan(fov / 2);
     double yTop = tan(fov / 2);
 
+    int maxWidth = WIDTH + (loc % 2 == 0 ? 0 : 1);
+    int maxHeight = HEIGHT + (loc < bottomLeft ? 0 : 1);
+    int minWidth = (loc % 2 == 0) ? 0 : 1;
+    int minHeight = (loc < bottomLeft) ? 0 : 1;
+
     vector<Ray> outputRays;
-    for (int i = 0; i < WIDTH; i++)
+    for (int i = minWidth; i < maxWidth; i++)
     {
-        for (int j = 0; j < HEIGHT; j++)
+        for (int j = minHeight; j < maxHeight; j++)
         {
             //            Starts at camera position
             Point from;
@@ -477,20 +491,66 @@ int testRayTriangleIntersection(Ray &r, Triangle t)
 //MODIFY THIS FUNCTION
 void draw_scene()
 {
-    rays = initRays();
-    for (int i = 0; i < rays.size(); i++)
+    topLeftRays = initRays(topLeft);
+    for (int i = 0; i < topLeftRays.size(); i++)
     {
         for (int j = 0; j < num_spheres; j++)
         {
-            testRaySphereIntersection(rays[i], spheres[j]);
+            testRaySphereIntersection(topLeftRays[i], spheres[j]);
             //      calculateIllumination(rays[i]);
         }
         for (int j = 0; j < num_triangles; j++)
         {
-            testRayTriangleIntersection(rays[i], triangles[j]);
+            testRayTriangleIntersection(topLeftRays[i], triangles[j]);
             //      calculateIllumination(rays[i]);
         }
     }
+    if (shouldAntialiasing)
+    {
+        topRightRays = initRays(topRight);
+        for (int i = 0; i < topRightRays.size(); i++)
+        {
+            for (int j = 0; j < num_spheres; j++)
+            {
+                testRaySphereIntersection(topRightRays[i], spheres[j]);
+                //      calculateIllumination(rays[i]);
+            }
+            for (int j = 0; j < num_triangles; j++)
+            {
+                testRayTriangleIntersection(topRightRays[i], triangles[j]);
+                //      calculateIllumination(rays[i]);
+            }
+        }
+        bottomLeftRays = initRays(bottomLeft);
+        for (int i = 0; i < bottomLeftRays.size(); i++)
+        {
+            for (int j = 0; j < num_spheres; j++)
+            {
+                testRaySphereIntersection(bottomLeftRays[i], spheres[j]);
+                //      calculateIllumination(rays[i]);
+            }
+            for (int j = 0; j < num_triangles; j++)
+            {
+                testRayTriangleIntersection(bottomLeftRays[i], triangles[j]);
+                //      calculateIllumination(rays[i]);
+            }
+        }
+        bottomRightRays = initRays(bottomRight);
+        for (int i = 0; i < bottomRightRays.size(); i++)
+        {
+            for (int j = 0; j < num_spheres; j++)
+            {
+                testRaySphereIntersection(bottomRightRays[i], spheres[j]);
+                //      calculateIllumination(rays[i]);
+            }
+            for (int j = 0; j < num_triangles; j++)
+            {
+                testRayTriangleIntersection(bottomRightRays[i], triangles[j]);
+                //      calculateIllumination(rays[i]);
+            }
+        }
+    }
+
     //a simple test output
     int count = 0;
     for (unsigned int x = 0; x < WIDTH; x++)
@@ -499,7 +559,17 @@ void draw_scene()
         glBegin(GL_POINTS);
         for (unsigned int y = 0; y < HEIGHT; y++)
         {
-            plot_pixel(x, y, rays[count].color[0] * 256, rays[count].color[1] * 256, rays[count].color[2] * 256);
+            if (shouldAntialiasing)
+            {
+                plot_pixel(x, y,
+                           (topLeftRays[count].color[0] + topRightRays[count].color[0] + bottomLeftRays[count].color[0] + bottomRightRays[count].color[0]) / 4 * 256,
+                           (topLeftRays[count].color[1] + topRightRays[count].color[1] + bottomLeftRays[count].color[1] + bottomRightRays[count].color[1]) / 4 * 256,
+                           (topLeftRays[count].color[2] + topRightRays[count].color[2] + bottomLeftRays[count].color[2] + bottomRightRays[count].color[2]) / 4 * 256);
+            }
+            else
+            {
+                plot_pixel(x, y, topLeftRays[count].color[0] * 256, topLeftRays[count].color[1] * 256, topLeftRays[count].color[2] * 256);
+            }
             count++;
         }
         glEnd();
