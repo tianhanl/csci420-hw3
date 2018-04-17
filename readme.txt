@@ -25,3 +25,4 @@ Feature:                                 Status: finish? (yes/no)
    
 7) Extra Credit (up to 20 points)
    !!! explain your extra credit here, if applicable !!!
+1. Add antialiasing by averaging four points at each corner of a pixel

@@ -181,6 +181,7 @@ vector<Ray> topLeftRays;
 vector<Ray> topRightRays;
 vector<Ray> bottomLeftRays;
 vector<Ray> bottomRightRays;
+vector<Ray> centerRays;
 bool shouldAntialiasing = true;
 double ambient_light[3];
 
@@ -194,7 +195,7 @@ void plot_pixel_jpeg(int x, int y, unsigned char r, unsigned char g, unsigned ch
 
 void plot_pixel(int x, int y, unsigned char r, unsigned char g, unsigned char b);
 
-bool debug = true;
+bool debug = false;
 
 Ray createRay(Point from, Point to)
 {
@@ -213,6 +214,7 @@ int topLeft = 0;
 int topRight = 1;
 int bottomLeft = 2;
 int bottomRight = 3;
+int center = 4;
 
 vector<Ray> initRays(int loc)
 {
@@ -226,7 +228,13 @@ vector<Ray> initRays(int loc)
     int maxHeight = HEIGHT + (loc < bottomLeft ? 0 : 1);
     int minWidth = (loc % 2 == 0) ? 0 : 1;
     int minHeight = (loc < bottomLeft) ? 0 : 1;
-
+    if (loc == center)
+    {
+        maxWidth = WIDTH;
+        maxHeight = HEIGHT;
+        minWidth = 0;
+        minHeight = 0;
+    }
     vector<Ray> outputRays;
     for (int i = minWidth; i < maxWidth; i++)
     {
@@ -239,9 +247,19 @@ vector<Ray> initRays(int loc)
             from.z = 0;
             //            Ends at a point on image plane at -1
             Point to;
-            to.x = xLeft + (i / (double)WIDTH) * 2 * xRight;
-            to.y = yBottom + (j / (double)HEIGHT) * 2 * yTop;
-            to.z = -1;
+            if (loc == center)
+            {
+                to.x = xLeft + ((i + 0.5) / (WIDTH + 0.5)) * 2 * xRight;
+                to.y = yBottom + ((j + 0.5) / (HEIGHT + 0.5)) * 2 * yTop;
+                to.z = -1;
+            }
+            else
+            {
+                to.x = xLeft + (i / (double)WIDTH) * 2 * xRight;
+                to.y = yBottom + (j / (double)HEIGHT) * 2 * yTop;
+                to.z = -1;
+            }
+
             outputRays.push_back(createRay(from, to));
         }
     }
@@ -549,6 +567,20 @@ void draw_scene()
                 //      calculateIllumination(rays[i]);
             }
         }
+        centerRays = initRays(center);
+        for (int i = 0; i < centerRays.size(); i++)
+        {
+            for (int j = 0; j < num_spheres; j++)
+            {
+                testRaySphereIntersection(centerRays[i], spheres[j]);
+                //      calculateIllumination(rays[i]);
+            }
+            for (int j = 0; j < num_triangles; j++)
+            {
+                testRayTriangleIntersection(centerRays[i], triangles[j]);
+                //      calculateIllumination(rays[i]);
+            }
+        }
     }
 
     //a simple test output
@@ -562,9 +594,9 @@ void draw_scene()
             if (shouldAntialiasing)
             {
                 plot_pixel(x, y,
-                           (topLeftRays[count].color[0] + topRightRays[count].color[0] + bottomLeftRays[count].color[0] + bottomRightRays[count].color[0]) / 4 * 256,
-                           (topLeftRays[count].color[1] + topRightRays[count].color[1] + bottomLeftRays[count].color[1] + bottomRightRays[count].color[1]) / 4 * 256,
-                           (topLeftRays[count].color[2] + topRightRays[count].color[2] + bottomLeftRays[count].color[2] + bottomRightRays[count].color[2]) / 4 * 256);
+                           (topLeftRays[count].color[0] + topRightRays[count].color[0] + bottomLeftRays[count].color[0] + bottomRightRays[count].color[0] + centerRays[count].color[0]) / 5 * 256,
+                           (topLeftRays[count].color[1] + topRightRays[count].color[1] + bottomLeftRays[count].color[1] + bottomRightRays[count].color[1] + centerRays[count].color[1]) / 5 * 256,
+                           (topLeftRays[count].color[2] + topRightRays[count].color[2] + bottomLeftRays[count].color[2] + bottomRightRays[count].color[2] + centerRays[count].color[2]) / 5 * 256);
             }
             else
             {
